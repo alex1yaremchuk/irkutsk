@@ -264,6 +264,15 @@ function renderPopup(parcel) {
   `;
 }
 
+function renderTooltip(parcel) {
+  const p = parcel.properties;
+  const title = p.lot_number ? `Участок №${escapeHtml(p.lot_number)}` : `Участок ${escapeHtml(p.short_num)}`;
+  return `
+    <div class="parcel-tooltip__title">${title}</div>
+    <div class="parcel-tooltip__status">${STATUS_LABELS[p.status] || "—"}</div>
+  `;
+}
+
 function closePopup(map, interactiveEntities) {
   if (openedState.marker) {
     map.removeChild(openedState.marker);
@@ -319,11 +328,13 @@ function updateLabelNode(node, parcel) {
 }
 
 function updateStats(features) {
+  const statsNode = document.getElementById("stats");
+  if (!statsNode) return;
   const counts = { free: 0, reserved: 0, sold: 0 };
   features.forEach((feature) => {
     counts[feature.properties.status] = (counts[feature.properties.status] || 0) + 1;
   });
-  document.getElementById("stats").innerHTML = `
+  statsNode.innerHTML = `
     <div class="stat"><strong>${counts.free}</strong><span>свободно</span></div>
     <div class="stat"><strong>${counts.reserved}</strong><span>бронь</span></div>
     <div class="stat"><strong>${counts.sold}</strong><span>продано</span></div>
@@ -405,6 +416,9 @@ async function init() {
   const featureByCadnum = new Map();
   const labelMarkerByCadnum = new Map();
   const labelByCadnum = new Map();
+  const tooltipNode = document.createElement("div");
+  tooltipNode.className = "parcel-tooltip";
+  document.body.appendChild(tooltipNode);
   let hoveredParcelId = null;
   let hoveredParcel = null;
   let lastPointerLngLat = null;
@@ -416,6 +430,21 @@ async function init() {
   );
   const markInteractiveClick = () => {
     lastInteractiveClickAt = nowTs();
+  };
+  const moveTooltip = (event) => {
+    tooltipNode.style.left = `${event.clientX}px`;
+    tooltipNode.style.top = `${event.clientY}px`;
+  };
+  const hideTooltip = () => {
+    tooltipNode.classList.remove("is-visible");
+  };
+  const showTooltip = (parcel) => {
+    if (!parcel) {
+      hideTooltip();
+      return;
+    }
+    tooltipNode.innerHTML = renderTooltip(parcel);
+    tooltipNode.classList.add("is-visible");
   };
 
   function setHoveredParcel(parcel) {
@@ -433,6 +462,9 @@ async function init() {
     if (parcel) {
       const feature = featureByCadnum.get(nextId);
       if (feature) feature.update({ style: getParcelStyle(parcel, true) });
+      showTooltip(parcel);
+    } else {
+      hideTooltip();
     }
   }
 
@@ -594,6 +626,8 @@ async function init() {
     markInteractiveClick();
     openPopup(map, parcel, YMapMarker, interactiveEntities);
   });
+  document.addEventListener("mousemove", moveTooltip);
+  document.getElementById("map").addEventListener("mouseleave", () => setHoveredParcel(null));
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
