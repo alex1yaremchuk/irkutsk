@@ -2,6 +2,7 @@ const DATA_URL = "./data/demo_parcels.geojson";
 const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRAfXw_YaBPg3ofRp-75nvcVibslg-AeY-HwhpYYQXDcaZTzP3hPBupBoKROsHstC3hRDOl_zPpX1jh/pub?gid=0&single=true&output=csv";
 const SHEET_REFRESH_MS = 30_000;
 const CADASTRAL_PREFIX = "38:06:111215:";
+const LABELS_MIN_ZOOM = 17;
 const TELEGRAM_USERNAME = "ayarem";
 const WHATSAPP_PHONE = "79679670322";
 
@@ -416,13 +417,16 @@ async function init() {
   const featureByCadnum = new Map();
   const labelMarkerByCadnum = new Map();
   const labelByCadnum = new Map();
+  const visibleLabelCadnums = new Set();
   const tooltipNode = document.createElement("div");
   tooltipNode.className = "parcel-tooltip";
   document.body.appendChild(tooltipNode);
+  let currentZoom = 16;
   let hoveredParcelId = null;
   let hoveredParcel = null;
   let lastPointerLngLat = null;
   let lastInteractiveClickAt = 0;
+  let pointerBlocksHover = false;
   const nowTs = () => (
     typeof performance !== "undefined" && typeof performance.now === "function"
       ? performance.now()
@@ -431,23 +435,53 @@ async function init() {
   const markInteractiveClick = () => {
     lastInteractiveClickAt = nowTs();
   };
+  const isEventOverPopup = (event) => {
+    if (event?.target?.closest?.(".parcel-popup")) return true;
+    if (!Number.isFinite(event?.clientX) || !Number.isFinite(event?.clientY)) return false;
+    return !!document.elementFromPoint(event.clientX, event.clientY)?.closest?.(".parcel-popup");
+  };
   const moveTooltip = (event) => {
+    pointerBlocksHover = isEventOverPopup(event);
     tooltipNode.style.left = `${event.clientX}px`;
     tooltipNode.style.top = `${event.clientY}px`;
+    if (pointerBlocksHover) setHoveredParcel(null);
   };
   const hideTooltip = () => {
     tooltipNode.classList.remove("is-visible");
   };
   const showTooltip = (parcel) => {
-    if (!parcel) {
+    if (!parcel || pointerBlocksHover) {
       hideTooltip();
       return;
     }
     tooltipNode.innerHTML = renderTooltip(parcel);
     tooltipNode.classList.add("is-visible");
   };
+  const attachPopupHoverGuard = () => {
+    const node = openedState.node;
+    if (!node || node.dataset.hoverGuard === "1") return;
+    node.dataset.hoverGuard = "1";
+    node.addEventListener("mouseenter", () => {
+      pointerBlocksHover = true;
+      setHoveredParcel(null);
+    });
+    node.addEventListener("mousemove", (event) => {
+      pointerBlocksHover = true;
+      moveTooltip(event);
+      setHoveredParcel(null);
+    });
+    node.addEventListener("mouseleave", () => {
+      pointerBlocksHover = false;
+    });
+  };
+  const openParcelPopup = (parcel) => {
+    hideTooltip();
+    openPopup(map, parcel, YMapMarker, interactiveEntities);
+    attachPopupHoverGuard();
+  };
 
   function setHoveredParcel(parcel) {
+    if (pointerBlocksHover) parcel = null;
     const nextId = parcel?.properties?.cadnum || null;
     hoveredParcel = parcel || null;
     if (nextId === hoveredParcelId) return;
@@ -481,6 +515,40 @@ async function init() {
     }
   }
 
+  function shouldShowLabels() {
+    return currentZoom >= LABELS_MIN_ZOOM;
+  }
+
+  function addLabelMarker(cadnum) {
+    if (visibleLabelCadnums.has(cadnum)) return;
+    const labelMarker = labelMarkerByCadnum.get(cadnum);
+    const parcel = visibleFeatures.find((feature) => feature.properties.cadnum === cadnum);
+    if (!labelMarker || !parcel) return;
+    map.addChild(labelMarker);
+    labelByEntity.set(labelMarker, parcel);
+    visibleLabelCadnums.add(cadnum);
+  }
+
+  function removeLabelMarker(cadnum) {
+    if (!visibleLabelCadnums.has(cadnum)) return;
+    const labelMarker = labelMarkerByCadnum.get(cadnum);
+    if (labelMarker) {
+      map.removeChild(labelMarker);
+      labelByEntity.delete(labelMarker);
+    }
+    visibleLabelCadnums.delete(cadnum);
+  }
+
+  function updateLabelVisibility() {
+    labelMarkerByCadnum.forEach((_, cadnum) => {
+      if (shouldShowLabels()) {
+        addLabelMarker(cadnum);
+      } else {
+        removeLabelMarker(cadnum);
+      }
+    });
+  }
+
   function addParcelToMap(parcel) {
     const cadnum = parcel.properties.cadnum;
     if (featureByCadnum.has(cadnum)) return;
@@ -494,7 +562,7 @@ async function init() {
       style: getParcelStyle(parcel),
       onClick: () => {
         markInteractiveClick();
-        openPopup(map, parcel, YMapMarker, interactiveEntities);
+        openParcelPopup(parcel);
       },
       onMouseEnter: () => setHoveredParcel(parcel),
       onMouseLeave: () => setHoveredParcel(null),
@@ -512,10 +580,9 @@ async function init() {
         zIndex: 2200,
         disableRoundCoordinates: true,
       }, labelNode);
-      map.addChild(labelMarker);
-      labelByEntity.set(labelMarker, parcel);
       labelMarkerByCadnum.set(cadnum, labelMarker);
       labelByCadnum.set(cadnum, labelNode);
+      if (shouldShowLabels()) addLabelMarker(cadnum);
     }
   }
 
@@ -530,10 +597,11 @@ async function init() {
 
     const labelMarker = labelMarkerByCadnum.get(cadnum);
     if (labelMarker) {
-      map.removeChild(labelMarker);
+      if (visibleLabelCadnums.has(cadnum)) map.removeChild(labelMarker);
       labelByEntity.delete(labelMarker);
       labelMarkerByCadnum.delete(cadnum);
       labelByCadnum.delete(cadnum);
+      visibleLabelCadnums.delete(cadnum);
     }
 
     if (hoveredParcelId === cadnum) setHoveredParcel(null);
@@ -551,6 +619,7 @@ async function init() {
     });
 
     visibleFeatures = allFeatures.filter((parcel) => featureByCadnum.has(parcel.properties.cadnum));
+    updateLabelVisibility();
     refreshMapFromProperties();
   }
 
@@ -578,13 +647,21 @@ async function init() {
 
   const listener = new YMapListener({
     layer: "any",
+    onUpdate: (event = {}) => {
+      const location = event.location || event;
+      const nextZoom = Number(location?.zoom);
+      if (!Number.isFinite(nextZoom) || nextZoom === currentZoom) return;
+      currentZoom = nextZoom;
+      updateLabelVisibility();
+    },
     onClick: (object, event) => {
+      if (pointerBlocksHover) return;
       const entity = object?.entity || null;
       if (entity && labelByEntity.has(entity)) {
         const parcel = labelByEntity.get(entity);
         if (parcel) {
           markInteractiveClick();
-          openPopup(map, parcel, YMapMarker, interactiveEntities);
+          openParcelPopup(parcel);
           return;
         }
       }
@@ -592,13 +669,13 @@ async function init() {
       const entityParcel = featureByEntity.get(entity);
       if (entityParcel) {
         markInteractiveClick();
-        openPopup(map, entityParcel, YMapMarker, interactiveEntities);
+        openParcelPopup(entityParcel);
         return;
       }
       const clickedParcel = findParcelByLngLat(visibleFeatures, extractLngLat(object, event) || lastPointerLngLat);
       if (clickedParcel) {
         markInteractiveClick();
-        openPopup(map, clickedParcel, YMapMarker, interactiveEntities);
+        openParcelPopup(clickedParcel);
         return;
       }
       if (!entity || !interactiveEntities.has(entity)) {
@@ -606,6 +683,10 @@ async function init() {
       }
     },
     onMouseMove: (object, event) => {
+      if (pointerBlocksHover) {
+        setHoveredParcel(null);
+        return;
+      }
       const entity = object?.entity || null;
       lastPointerLngLat = extractLngLat(object, event) || lastPointerLngLat;
       const parcel = featureByEntity.get(entity) ||
@@ -624,7 +705,7 @@ async function init() {
       return;
     }
     markInteractiveClick();
-    openPopup(map, parcel, YMapMarker, interactiveEntities);
+    openParcelPopup(parcel);
   });
   document.addEventListener("mousemove", moveTooltip);
   document.getElementById("map").addEventListener("mouseleave", () => setHoveredParcel(null));
