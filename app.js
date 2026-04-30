@@ -12,9 +12,9 @@ const STATUS_LABELS = {
 };
 
 const STATUS_COLORS = {
-  free: { fill: "#2f9e44", hover: "#40c057", stroke: "#14532d" },
-  reserved: { fill: "#f59f00", hover: "#fab005", stroke: "#92400e" },
-  sold: { fill: "#8b1e2d", hover: "#a61e34", stroke: "#450a0a" },
+  free: { fill: "#309F48", hover: "#46bf5f", stroke: "#4c566a" },
+  reserved: { fill: "#94a3b8", hover: "#a5b1c4", stroke: "#4c566a" },
+  sold: { fill: "#636363", hover: "#484848", stroke: "#4c566a" },
 };
 
 const openedState = { marker: null, parcelId: null, node: null };
