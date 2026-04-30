@@ -10,7 +10,7 @@
   <main class="app-shell">
     <aside class="panel">
       <div class="panel__header">
-        <p class="eyebrow">Демо без Google Sheet</p>
+        <p class="eyebrow">Данные из Google Sheet</p>
         <h1>Участки 38:06:111215</h1>
       </div>
       <div class="stats" id="stats"></div>
@@ -20,13 +20,14 @@
         <span><i class="legend__swatch legend__swatch--sold"></i>Продано</span>
       </div>
       <div class="panel__note">
-        Статусы и цены сгенерированы для демо. Геометрия загружается из локального GeoJSON.
+        Геометрия загружается из локального GeoJSON. Статусы, площади и цены подтягиваются из опубликованной таблицы.
+        <span class="sheet-status" id="sheet-status">Google Sheet: загрузка...</span>
       </div>
     </aside>
     <section id="map" aria-label="Карта участков"></section>
   </main>
 
   <script src="https://api-maps.yandex.ru/v3/?lang=ru_RU&apikey=16d442f1-df6c-4a2d-a863-ed6a830dd524"></script>
-  <script src="./app.js?v=20260429-06"></script>
+  <script src="./app.js?v=20260430-01"></script>
 </body>
 </html>

@@ -1,4 +1,7 @@
 const DATA_URL = "./data/demo_parcels.geojson";
+const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRAfXw_YaBPg3ofRp-75nvcVibslg-AeY-HwhpYYQXDcaZTzP3hPBupBoKROsHstC3hRDOl_zPpX1jh/pub?gid=0&single=true&output=csv";
+const SHEET_REFRESH_MS = 30_000;
+const CADASTRAL_PREFIX = "38:06:111215:";
 const TELEGRAM_USERNAME = "ayarem";
 const WHATSAPP_PHONE = "79679670322";
 
@@ -15,6 +18,11 @@ const STATUS_COLORS = {
 };
 
 const openedState = { marker: null, parcelId: null, node: null };
+const sheetState = { timestamp: null, lastLoadAt: null, error: null };
+
+function trimCell(value) {
+  return String(value ?? "").replace(/\u00A0/g, " ").trim();
+}
 
 function formatRub(value) {
   if (!Number.isFinite(Number(value))) return "—";
@@ -24,6 +32,102 @@ function formatRub(value) {
 function formatArea(value) {
   if (!Number.isFinite(Number(value))) return "—";
   return new Intl.NumberFormat("ru-RU").format(Math.round(Number(value))) + " м²";
+}
+
+function formatSheetTimestamp(value) {
+  return value ? value : "нет данных";
+}
+
+function parseNumberRu(value) {
+  const cleaned = trimCell(value).replace(/\s+/g, "").replace(",", ".");
+  if (!cleaned) return null;
+  const number = Number(cleaned);
+  return Number.isFinite(number) ? number : null;
+}
+
+function normalizeStatus(value) {
+  const text = trimCell(value).toLowerCase();
+  if (!text) return null;
+  if (text.includes("свобод")) return "free";
+  if (text.includes("брон") || text.includes("резерв")) return "reserved";
+  if (text.includes("прод")) return "sold";
+  return null;
+}
+
+function toFullCadnum(value) {
+  const text = trimCell(value);
+  if (!text) return null;
+  if (/^\d{2}:\d{2}:\d{6,7}:\d+$/.test(text)) return text;
+  if (/^\d+$/.test(text)) return `${CADASTRAL_PREFIX}${text}`;
+  const match = text.match(/\b\d{2}:\d{2}:\d{6,7}:\d+\b/);
+  return match ? match[0] : null;
+}
+
+function parseCsvRows(text) {
+  const source = String(text ?? "");
+  const rows = [];
+  let row = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+    if (ch === "\"") {
+      const next = source[i + 1];
+      if (inQuotes && next === "\"") {
+        field += "\"";
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (ch === "," && !inQuotes) {
+      row.push(field);
+      field = "";
+      continue;
+    }
+    if ((ch === "\n" || ch === "\r") && !inQuotes) {
+      if (ch === "\r" && source[i + 1] === "\n") i++;
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      continue;
+    }
+    field += ch;
+  }
+
+  row.push(field);
+  if (row.length > 1 || trimCell(row[0])) rows.push(row);
+  return rows;
+}
+
+function parseSheetCsv(text) {
+  const rows = parseCsvRows(text);
+  const timestamp = trimCell(rows[0]?.[1] || rows[0]?.[0]);
+  const map = new Map();
+
+  rows.slice(2).forEach((cells) => {
+    const cadnum = toFullCadnum(cells[0]);
+    if (!cadnum) return;
+    map.set(cadnum, {
+      cadnum,
+      lot_number: trimCell(cells[1]),
+      status: normalizeStatus(cells[2]),
+      area_m2: parseNumberRu(cells[3]),
+      price_rub: parseNumberRu(cells[4]),
+    });
+  });
+
+  return { timestamp, map };
+}
+
+async function loadSheetData() {
+  const cacheBust = (SHEET_CSV_URL.includes("?") ? "&" : "?") + "cb=" + Date.now();
+  const response = await fetch(SHEET_CSV_URL + cacheBust, { cache: "no-store" });
+  if (!response.ok) throw new Error(`Google Sheet HTTP ${response.status}`);
+  return parseSheetCsv(await response.text());
 }
 
 function escapeHtml(value) {
@@ -208,6 +312,12 @@ function createLabelNode(parcel) {
   return node;
 }
 
+function updateLabelNode(node, parcel) {
+  const textNode = node?.querySelector(".parcel-label__text");
+  if (!textNode) return;
+  textNode.textContent = parcel.properties.lot_number || parcel.properties.short_num;
+}
+
 function updateStats(features) {
   const counts = { free: 0, reserved: 0, sold: 0 };
   features.forEach((feature) => {
@@ -218,6 +328,37 @@ function updateStats(features) {
     <div class="stat"><strong>${counts.reserved}</strong><span>бронь</span></div>
     <div class="stat"><strong>${counts.sold}</strong><span>продано</span></div>
   `;
+}
+
+function updateSheetStatus() {
+  const node = document.getElementById("sheet-status");
+  if (!node) return;
+  if (sheetState.error) {
+    node.textContent = `Google Sheet: ошибка загрузки, показаны последние данные. ${sheetState.error}`;
+    return;
+  }
+  node.textContent = `Google Sheet: обновлено ${formatSheetTimestamp(sheetState.timestamp)}. Проверка каждые 30 секунд.`;
+}
+
+function applySheetData(features, sheetData) {
+  let changed = false;
+  features.forEach((feature) => {
+    const row = sheetData.map.get(feature.properties.cadnum);
+    if (!row) return;
+    const next = {
+      lot_number: row.lot_number || feature.properties.lot_number,
+      status: row.status || feature.properties.status,
+      area_m2: Number.isFinite(row.area_m2) ? row.area_m2 : feature.properties.area_m2,
+      price_rub: Number.isFinite(row.price_rub) ? row.price_rub : feature.properties.price_rub,
+    };
+    Object.entries(next).forEach(([key, value]) => {
+      if (feature.properties[key] !== value) {
+        feature.properties[key] = value;
+        changed = true;
+      }
+    });
+  });
+  return changed;
 }
 
 async function init() {
@@ -261,6 +402,7 @@ async function init() {
   const featureByEntity = new Map();
   const labelByEntity = new Map();
   const featureByCadnum = new Map();
+  const labelByCadnum = new Map();
   let hoveredParcelId = null;
   let hoveredParcel = null;
   let lastPointerLngLat = null;
@@ -289,6 +431,41 @@ async function init() {
     if (parcel) {
       const feature = featureByCadnum.get(nextId);
       if (feature) feature.update({ style: getParcelStyle(parcel, true) });
+    }
+  }
+
+  function refreshMapFromProperties() {
+    features.forEach((parcel) => {
+      const feature = featureByCadnum.get(parcel.properties.cadnum);
+      if (feature) feature.update({ style: getParcelStyle(parcel, hoveredParcelId === parcel.properties.cadnum) });
+      updateLabelNode(labelByCadnum.get(parcel.properties.cadnum), parcel);
+    });
+    updateStats(features);
+    if (openedState.parcelId && openedState.node) {
+      const openedParcel = features.find((feature) => feature.properties.cadnum === openedState.parcelId);
+      if (openedParcel) openedState.node.innerHTML = renderPopup(openedParcel);
+    }
+  }
+
+  async function refreshSheetData({ force = false } = {}) {
+    try {
+      const sheetData = await loadSheetData();
+      sheetState.error = null;
+      sheetState.lastLoadAt = Date.now();
+
+      if (!force && sheetData.timestamp && sheetData.timestamp === sheetState.timestamp) {
+        updateSheetStatus();
+        return;
+      }
+
+      sheetState.timestamp = sheetData.timestamp || sheetState.timestamp;
+      const changed = applySheetData(features, sheetData);
+      if (changed || force) refreshMapFromProperties();
+      updateSheetStatus();
+    } catch (error) {
+      sheetState.error = error.message;
+      updateSheetStatus();
+      console.error(error);
     }
   }
 
@@ -370,15 +547,20 @@ async function init() {
 
     const centerPoint = ringCenter(getOuterRing(parcel));
     if (centerPoint) {
+      const labelNode = createLabelNode(parcel);
       const labelMarker = new YMapMarker({
         coordinates: centerPoint,
         zIndex: 2200,
         disableRoundCoordinates: true,
-      }, createLabelNode(parcel));
+      }, labelNode);
       map.addChild(labelMarker);
       labelByEntity.set(labelMarker, parcel);
+      labelByCadnum.set(parcel.properties.cadnum, labelNode);
     }
   });
+
+  await refreshSheetData({ force: true });
+  setInterval(() => refreshSheetData(), SHEET_REFRESH_MS);
 
   setTimeout(() => {
     map.setLocation({ bounds, duration: 0 });
