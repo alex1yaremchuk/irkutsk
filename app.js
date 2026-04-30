@@ -376,13 +376,14 @@ async function init() {
     YMapDefaultFeaturesLayer,
   } = ymaps3;
 
-  const response = await fetch(`${DATA_URL}?v=20260429-02`, { cache: "no-store" });
+  const response = await fetch(`${DATA_URL}?v=20260430-02`, { cache: "no-store" });
   if (!response.ok) throw new Error("Не удалось загрузить demo_parcels.geojson");
   const data = await response.json();
-  const features = data.features || [];
-  updateStats(features);
+  const allFeatures = data.features || [];
+  let visibleFeatures = [];
+  updateStats(visibleFeatures);
 
-  const bounds = getBounds(features);
+  const bounds = getBounds(allFeatures);
   const center = [
     (bounds[0][0] + bounds[1][0]) / 2,
     (bounds[0][1] + bounds[1][1]) / 2,
@@ -402,6 +403,7 @@ async function init() {
   const featureByEntity = new Map();
   const labelByEntity = new Map();
   const featureByCadnum = new Map();
+  const labelMarkerByCadnum = new Map();
   const labelByCadnum = new Map();
   let hoveredParcelId = null;
   let hoveredParcel = null;
@@ -435,16 +437,89 @@ async function init() {
   }
 
   function refreshMapFromProperties() {
-    features.forEach((parcel) => {
+    visibleFeatures.forEach((parcel) => {
       const feature = featureByCadnum.get(parcel.properties.cadnum);
       if (feature) feature.update({ style: getParcelStyle(parcel, hoveredParcelId === parcel.properties.cadnum) });
       updateLabelNode(labelByCadnum.get(parcel.properties.cadnum), parcel);
     });
-    updateStats(features);
+    updateStats(visibleFeatures);
     if (openedState.parcelId && openedState.node) {
-      const openedParcel = features.find((feature) => feature.properties.cadnum === openedState.parcelId);
+      const openedParcel = visibleFeatures.find((feature) => feature.properties.cadnum === openedState.parcelId);
       if (openedParcel) openedState.node.innerHTML = renderPopup(openedParcel);
     }
+  }
+
+  function addParcelToMap(parcel) {
+    const cadnum = parcel.properties.cadnum;
+    if (featureByCadnum.has(cadnum)) return;
+
+    const rings = getPolygonRings(parcel);
+    if (!rings.length) return;
+
+    let mapFeature = null;
+    mapFeature = new YMapFeature({
+      geometry: { type: "Polygon", coordinates: rings },
+      style: getParcelStyle(parcel),
+      onClick: () => {
+        markInteractiveClick();
+        openPopup(map, parcel, YMapMarker, interactiveEntities);
+      },
+      onMouseEnter: () => setHoveredParcel(parcel),
+      onMouseLeave: () => setHoveredParcel(null),
+    });
+    map.addChild(mapFeature);
+    interactiveEntities.add(mapFeature);
+    featureByEntity.set(mapFeature, parcel);
+    featureByCadnum.set(cadnum, mapFeature);
+
+    const centerPoint = ringCenter(getOuterRing(parcel));
+    if (centerPoint) {
+      const labelNode = createLabelNode(parcel);
+      const labelMarker = new YMapMarker({
+        coordinates: centerPoint,
+        zIndex: 2200,
+        disableRoundCoordinates: true,
+      }, labelNode);
+      map.addChild(labelMarker);
+      labelByEntity.set(labelMarker, parcel);
+      labelMarkerByCadnum.set(cadnum, labelMarker);
+      labelByCadnum.set(cadnum, labelNode);
+    }
+  }
+
+  function removeParcelFromMap(cadnum) {
+    const feature = featureByCadnum.get(cadnum);
+    if (feature) {
+      map.removeChild(feature);
+      interactiveEntities.delete(feature);
+      featureByEntity.delete(feature);
+      featureByCadnum.delete(cadnum);
+    }
+
+    const labelMarker = labelMarkerByCadnum.get(cadnum);
+    if (labelMarker) {
+      map.removeChild(labelMarker);
+      labelByEntity.delete(labelMarker);
+      labelMarkerByCadnum.delete(cadnum);
+      labelByCadnum.delete(cadnum);
+    }
+
+    if (hoveredParcelId === cadnum) setHoveredParcel(null);
+    if (openedState.parcelId === cadnum) closePopup(map, interactiveEntities);
+  }
+
+  function syncVisibleParcels(sheetData) {
+    const visibleCadnums = new Set(sheetData.map.keys());
+    allFeatures.forEach((parcel) => {
+      if (visibleCadnums.has(parcel.properties.cadnum)) addParcelToMap(parcel);
+    });
+
+    Array.from(featureByCadnum.keys()).forEach((cadnum) => {
+      if (!visibleCadnums.has(cadnum)) removeParcelFromMap(cadnum);
+    });
+
+    visibleFeatures = allFeatures.filter((parcel) => featureByCadnum.has(parcel.properties.cadnum));
+    refreshMapFromProperties();
   }
 
   async function refreshSheetData({ force = false } = {}) {
@@ -459,8 +534,8 @@ async function init() {
       }
 
       sheetState.timestamp = sheetData.timestamp || sheetState.timestamp;
-      const changed = applySheetData(features, sheetData);
-      if (changed || force) refreshMapFromProperties();
+      applySheetData(allFeatures, sheetData);
+      syncVisibleParcels(sheetData);
       updateSheetStatus();
     } catch (error) {
       sheetState.error = error.message;
@@ -488,7 +563,7 @@ async function init() {
         openPopup(map, entityParcel, YMapMarker, interactiveEntities);
         return;
       }
-      const clickedParcel = findParcelByLngLat(features, extractLngLat(object, event) || lastPointerLngLat);
+      const clickedParcel = findParcelByLngLat(visibleFeatures, extractLngLat(object, event) || lastPointerLngLat);
       if (clickedParcel) {
         markInteractiveClick();
         openPopup(map, clickedParcel, YMapMarker, interactiveEntities);
@@ -503,7 +578,7 @@ async function init() {
       lastPointerLngLat = extractLngLat(object, event) || lastPointerLngLat;
       const parcel = featureByEntity.get(entity) ||
         labelByEntity.get(entity) ||
-        findParcelByLngLat(features, lastPointerLngLat);
+        findParcelByLngLat(visibleFeatures, lastPointerLngLat);
       setHoveredParcel(parcel);
     },
   });
@@ -511,7 +586,7 @@ async function init() {
 
   document.getElementById("map").addEventListener("click", () => {
     if (nowTs() - lastInteractiveClickAt < 160) return;
-    const parcel = hoveredParcel || findParcelByLngLat(features, lastPointerLngLat);
+    const parcel = hoveredParcel || findParcelByLngLat(visibleFeatures, lastPointerLngLat);
     if (!parcel) {
       closePopup(map, interactiveEntities);
       return;
@@ -523,39 +598,6 @@ async function init() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closePopup(map, interactiveEntities);
-    }
-  });
-
-  features.forEach((parcel) => {
-    const rings = getPolygonRings(parcel);
-    if (!rings.length) return;
-    let mapFeature = null;
-    mapFeature = new YMapFeature({
-      geometry: { type: "Polygon", coordinates: rings },
-      style: getParcelStyle(parcel),
-      onClick: () => {
-        markInteractiveClick();
-        openPopup(map, parcel, YMapMarker, interactiveEntities);
-      },
-      onMouseEnter: () => setHoveredParcel(parcel),
-      onMouseLeave: () => setHoveredParcel(null),
-    });
-    map.addChild(mapFeature);
-    interactiveEntities.add(mapFeature);
-    featureByEntity.set(mapFeature, parcel);
-    featureByCadnum.set(parcel.properties.cadnum, mapFeature);
-
-    const centerPoint = ringCenter(getOuterRing(parcel));
-    if (centerPoint) {
-      const labelNode = createLabelNode(parcel);
-      const labelMarker = new YMapMarker({
-        coordinates: centerPoint,
-        zIndex: 2200,
-        disableRoundCoordinates: true,
-      }, labelNode);
-      map.addChild(labelMarker);
-      labelByEntity.set(labelMarker, parcel);
-      labelByCadnum.set(parcel.properties.cadnum, labelNode);
     }
   });
 
