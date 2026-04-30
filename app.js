@@ -1,8 +1,9 @@
 const DATA_URL = "./data/demo_parcels.geojson";
-const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRAfXw_YaBPg3ofRp-75nvcVibslg-AeY-HwhpYYQXDcaZTzP3hPBupBoKROsHstC3hRDOl_zPpX1jh/pub?gid=0&single=true&output=csv";
+const SHEET_CSV_URL =
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vRAfXw_YaBPg3ofRp-75nvcVibslg-AeY-HwhpYYQXDcaZTzP3hPBupBoKROsHstC3hRDOl_zPpX1jh/pub?gid=0&single=true&output=csv";
 const SHEET_REFRESH_MS = 30_000;
 const CADASTRAL_PREFIX = "38:06:111215:";
-const LABELS_MIN_ZOOM = 17;
+const LABELS_MIN_ZOOM = 13;
 const TELEGRAM_USERNAME = "ayarem";
 const WHATSAPP_PHONE = "79679670322";
 
@@ -22,7 +23,9 @@ const openedState = { marker: null, parcelId: null, node: null };
 const sheetState = { timestamp: null, lastLoadAt: null, error: null };
 
 function trimCell(value) {
-  return String(value ?? "").replace(/\u00A0/g, " ").trim();
+  return String(value ?? "")
+    .replace(/\u00A0/g, " ")
+    .trim();
 }
 
 function formatRub(value) {
@@ -32,7 +35,9 @@ function formatRub(value) {
 
 function formatArea(value) {
   if (!Number.isFinite(Number(value))) return "—";
-  return new Intl.NumberFormat("ru-RU").format(Math.round(Number(value))) + " м²";
+  return (
+    new Intl.NumberFormat("ru-RU").format(Math.round(Number(value))) + " м²"
+  );
 }
 
 function formatSheetTimestamp(value) {
@@ -73,10 +78,10 @@ function parseCsvRows(text) {
 
   for (let i = 0; i < source.length; i++) {
     const ch = source[i];
-    if (ch === "\"") {
+    if (ch === '"') {
       const next = source[i + 1];
-      if (inQuotes && next === "\"") {
-        field += "\"";
+      if (inQuotes && next === '"') {
+        field += '"';
         i++;
       } else {
         inQuotes = !inQuotes;
@@ -125,8 +130,11 @@ function parseSheetCsv(text) {
 }
 
 async function loadSheetData() {
-  const cacheBust = (SHEET_CSV_URL.includes("?") ? "&" : "?") + "cb=" + Date.now();
-  const response = await fetch(SHEET_CSV_URL + cacheBust, { cache: "no-store" });
+  const cacheBust =
+    (SHEET_CSV_URL.includes("?") ? "&" : "?") + "cb=" + Date.now();
+  const response = await fetch(SHEET_CSV_URL + cacheBust, {
+    cache: "no-store",
+  });
   if (!response.ok) throw new Error(`Google Sheet HTTP ${response.status}`);
   return parseSheetCsv(await response.text());
 }
@@ -156,8 +164,8 @@ function isPointInRing(lon, lat, ring) {
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const [xi, yi] = ring[i];
     const [xj, yj] = ring[j];
-    const intersects = ((yi > lat) !== (yj > lat)) &&
-      (lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi);
+    const intersects =
+      yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
     if (intersects) inside = !inside;
   }
   return inside;
@@ -174,7 +182,9 @@ function findParcelByLngLat(features, lngLat) {
   const lon = Number(lngLat[0]);
   const lat = Number(lngLat[1]);
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
-  return features.find((feature) => isPointInFeature(lon, lat, feature)) || null;
+  return (
+    features.find((feature) => isPointInFeature(lon, lat, feature)) || null
+  );
 }
 
 function extractLngLat(object, event) {
@@ -247,7 +257,9 @@ function buildWhatsAppUrl(parcel) {
 function renderPopup(parcel) {
   const p = parcel.properties;
   const palette = STATUS_COLORS[p.status] || STATUS_COLORS.free;
-  const title = p.lot_number ? `Участок №${escapeHtml(p.lot_number)}` : `Участок ${escapeHtml(p.short_num)}`;
+  const title = p.lot_number
+    ? `Участок №${escapeHtml(p.lot_number)}`
+    : `Участок ${escapeHtml(p.short_num)}`;
   return `
     <button class="parcel-popup__close" type="button" aria-label="Закрыть">×</button>
     <div class="parcel-popup__title">${title}</div>
@@ -267,7 +279,9 @@ function renderPopup(parcel) {
 
 function renderTooltip(parcel) {
   const p = parcel.properties;
-  const title = p.lot_number ? `Участок №${escapeHtml(p.lot_number)}` : `Участок ${escapeHtml(p.short_num)}`;
+  const title = p.lot_number
+    ? `Участок №${escapeHtml(p.lot_number)}`
+    : `Участок ${escapeHtml(p.short_num)}`;
   return `
     <div class="parcel-tooltip__title">${title}</div>
     <div class="parcel-tooltip__status">${STATUS_LABELS[p.status] || "—"}</div>
@@ -302,11 +316,14 @@ function openPopup(map, parcel, YMapMarker, interactiveEntities) {
       closePopup(map, interactiveEntities);
     }
   });
-  const marker = new YMapMarker({
-    coordinates: center,
-    zIndex: 3000,
-    disableRoundCoordinates: true,
-  }, node);
+  const marker = new YMapMarker(
+    {
+      coordinates: center,
+      zIndex: 3000,
+      disableRoundCoordinates: true,
+    },
+    node,
+  );
   map.addChild(marker);
   interactiveEntities.add(marker);
   openedState.marker = marker;
@@ -325,7 +342,8 @@ function createLabelNode(parcel) {
 function updateLabelNode(node, parcel) {
   const textNode = node?.querySelector(".parcel-label__text");
   if (!textNode) return;
-  textNode.textContent = parcel.properties.lot_number || parcel.properties.short_num;
+  textNode.textContent =
+    parcel.properties.lot_number || parcel.properties.short_num;
 }
 
 function updateStats(features) {
@@ -333,7 +351,8 @@ function updateStats(features) {
   if (!statsNode) return;
   const counts = { free: 0, reserved: 0, sold: 0 };
   features.forEach((feature) => {
-    counts[feature.properties.status] = (counts[feature.properties.status] || 0) + 1;
+    counts[feature.properties.status] =
+      (counts[feature.properties.status] || 0) + 1;
   });
   statsNode.innerHTML = `
     <div class="stat"><strong>${counts.free}</strong><span>свободно</span></div>
@@ -360,8 +379,12 @@ function applySheetData(features, sheetData) {
     const next = {
       lot_number: row.lot_number || feature.properties.lot_number,
       status: row.status || feature.properties.status,
-      area_m2: Number.isFinite(row.area_m2) ? row.area_m2 : feature.properties.area_m2,
-      price_rub: Number.isFinite(row.price_rub) ? row.price_rub : feature.properties.price_rub,
+      area_m2: Number.isFinite(row.area_m2)
+        ? row.area_m2
+        : feature.properties.area_m2,
+      price_rub: Number.isFinite(row.price_rub)
+        ? row.price_rub
+        : feature.properties.price_rub,
     };
     Object.entries(next).forEach(([key, value]) => {
       if (feature.properties[key] !== value) {
@@ -375,7 +398,8 @@ function applySheetData(features, sheetData) {
 
 async function init() {
   if (!window.ymaps3) {
-    document.getElementById("map").textContent = "Yandex Maps API не загрузился.";
+    document.getElementById("map").textContent =
+      "Yandex Maps API не загрузился.";
     return;
   }
   await ymaps3.ready;
@@ -388,8 +412,11 @@ async function init() {
     YMapDefaultFeaturesLayer,
   } = ymaps3;
 
-  const response = await fetch(`${DATA_URL}?v=20260430-02`, { cache: "no-store" });
-  if (!response.ok) throw new Error("Не удалось загрузить demo_parcels.geojson");
+  const response = await fetch(`${DATA_URL}?v=20260430-02`, {
+    cache: "no-store",
+  });
+  if (!response.ok)
+    throw new Error("Не удалось загрузить demo_parcels.geojson");
   const data = await response.json();
   const allFeatures = data.features || [];
   let visibleFeatures = [];
@@ -427,18 +454,20 @@ async function init() {
   let lastPointerLngLat = null;
   let lastInteractiveClickAt = 0;
   let pointerBlocksHover = false;
-  const nowTs = () => (
+  const nowTs = () =>
     typeof performance !== "undefined" && typeof performance.now === "function"
       ? performance.now()
-      : Date.now()
-  );
+      : Date.now();
   const markInteractiveClick = () => {
     lastInteractiveClickAt = nowTs();
   };
   const isEventOverPopup = (event) => {
     if (event?.target?.closest?.(".parcel-popup")) return true;
-    if (!Number.isFinite(event?.clientX) || !Number.isFinite(event?.clientY)) return false;
-    return !!document.elementFromPoint(event.clientX, event.clientY)?.closest?.(".parcel-popup");
+    if (!Number.isFinite(event?.clientX) || !Number.isFinite(event?.clientY))
+      return false;
+    return !!document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest?.(".parcel-popup");
   };
   const moveTooltip = (event) => {
     pointerBlocksHover = isEventOverPopup(event);
@@ -487,7 +516,9 @@ async function init() {
     if (nextId === hoveredParcelId) return;
     if (hoveredParcelId) {
       const previousFeature = featureByCadnum.get(hoveredParcelId);
-      const previousParcel = previousFeature ? featureByEntity.get(previousFeature) : null;
+      const previousParcel = previousFeature
+        ? featureByEntity.get(previousFeature)
+        : null;
       if (previousFeature && previousParcel) {
         previousFeature.update({ style: getParcelStyle(previousParcel) });
       }
@@ -505,12 +536,20 @@ async function init() {
   function refreshMapFromProperties() {
     visibleFeatures.forEach((parcel) => {
       const feature = featureByCadnum.get(parcel.properties.cadnum);
-      if (feature) feature.update({ style: getParcelStyle(parcel, hoveredParcelId === parcel.properties.cadnum) });
+      if (feature)
+        feature.update({
+          style: getParcelStyle(
+            parcel,
+            hoveredParcelId === parcel.properties.cadnum,
+          ),
+        });
       updateLabelNode(labelByCadnum.get(parcel.properties.cadnum), parcel);
     });
     updateStats(visibleFeatures);
     if (openedState.parcelId && openedState.node) {
-      const openedParcel = visibleFeatures.find((feature) => feature.properties.cadnum === openedState.parcelId);
+      const openedParcel = visibleFeatures.find(
+        (feature) => feature.properties.cadnum === openedState.parcelId,
+      );
       if (openedParcel) openedState.node.innerHTML = renderPopup(openedParcel);
     }
   }
@@ -522,7 +561,9 @@ async function init() {
   function addLabelMarker(cadnum) {
     if (visibleLabelCadnums.has(cadnum)) return;
     const labelMarker = labelMarkerByCadnum.get(cadnum);
-    const parcel = visibleFeatures.find((feature) => feature.properties.cadnum === cadnum);
+    const parcel = visibleFeatures.find(
+      (feature) => feature.properties.cadnum === cadnum,
+    );
     if (!labelMarker || !parcel) return;
     map.addChild(labelMarker);
     labelByEntity.set(labelMarker, parcel);
@@ -575,11 +616,14 @@ async function init() {
     const centerPoint = ringCenter(getOuterRing(parcel));
     if (centerPoint) {
       const labelNode = createLabelNode(parcel);
-      const labelMarker = new YMapMarker({
-        coordinates: centerPoint,
-        zIndex: 2200,
-        disableRoundCoordinates: true,
-      }, labelNode);
+      const labelMarker = new YMapMarker(
+        {
+          coordinates: centerPoint,
+          zIndex: 2200,
+          disableRoundCoordinates: true,
+        },
+        labelNode,
+      );
       labelMarkerByCadnum.set(cadnum, labelMarker);
       labelByCadnum.set(cadnum, labelNode);
       if (shouldShowLabels()) addLabelMarker(cadnum);
@@ -618,7 +662,9 @@ async function init() {
       if (!visibleCadnums.has(cadnum)) removeParcelFromMap(cadnum);
     });
 
-    visibleFeatures = allFeatures.filter((parcel) => featureByCadnum.has(parcel.properties.cadnum));
+    visibleFeatures = allFeatures.filter((parcel) =>
+      featureByCadnum.has(parcel.properties.cadnum),
+    );
     updateLabelVisibility();
     refreshMapFromProperties();
   }
@@ -629,7 +675,11 @@ async function init() {
       sheetState.error = null;
       sheetState.lastLoadAt = Date.now();
 
-      if (!force && sheetData.timestamp && sheetData.timestamp === sheetState.timestamp) {
+      if (
+        !force &&
+        sheetData.timestamp &&
+        sheetData.timestamp === sheetState.timestamp
+      ) {
         updateSheetStatus();
         return;
       }
@@ -672,7 +722,10 @@ async function init() {
         openParcelPopup(entityParcel);
         return;
       }
-      const clickedParcel = findParcelByLngLat(visibleFeatures, extractLngLat(object, event) || lastPointerLngLat);
+      const clickedParcel = findParcelByLngLat(
+        visibleFeatures,
+        extractLngLat(object, event) || lastPointerLngLat,
+      );
       if (clickedParcel) {
         markInteractiveClick();
         openParcelPopup(clickedParcel);
@@ -689,7 +742,8 @@ async function init() {
       }
       const entity = object?.entity || null;
       lastPointerLngLat = extractLngLat(object, event) || lastPointerLngLat;
-      const parcel = featureByEntity.get(entity) ||
+      const parcel =
+        featureByEntity.get(entity) ||
         labelByEntity.get(entity) ||
         findParcelByLngLat(visibleFeatures, lastPointerLngLat);
       setHoveredParcel(parcel);
@@ -699,7 +753,8 @@ async function init() {
 
   document.getElementById("map").addEventListener("click", () => {
     if (nowTs() - lastInteractiveClickAt < 160) return;
-    const parcel = hoveredParcel || findParcelByLngLat(visibleFeatures, lastPointerLngLat);
+    const parcel =
+      hoveredParcel || findParcelByLngLat(visibleFeatures, lastPointerLngLat);
     if (!parcel) {
       closePopup(map, interactiveEntities);
       return;
@@ -708,7 +763,9 @@ async function init() {
     openParcelPopup(parcel);
   });
   document.addEventListener("mousemove", moveTooltip);
-  document.getElementById("map").addEventListener("mouseleave", () => setHoveredParcel(null));
+  document
+    .getElementById("map")
+    .addEventListener("mouseleave", () => setHoveredParcel(null));
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
@@ -726,5 +783,6 @@ async function init() {
 
 init().catch((error) => {
   console.error(error);
-  document.getElementById("map").textContent = `Ошибка запуска карты: ${error.message}`;
+  document.getElementById("map").textContent =
+    `Ошибка запуска карты: ${error.message}`;
 });
