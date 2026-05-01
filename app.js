@@ -4,6 +4,8 @@ const SHEET_CSV_URL =
 const SHEET_REFRESH_MS = 30_000;
 const CADASTRAL_PREFIX = "38:06:111215:";
 const LABELS_MIN_ZOOM = 16;
+const LABEL_OFFSET_EAST_METERS = 0;
+const LABEL_OFFSET_NORTH_METERS = 0;
 const TELEGRAM_USERNAME = "ayarem";
 const WHATSAPP_PHONE = "79679670322";
 
@@ -220,6 +222,15 @@ function ringCenter(ring) {
     maxLat = Math.max(maxLat, lat);
   });
   return [(minLon + maxLon) / 2, (minLat + maxLat) / 2];
+}
+
+function offsetLngLatByMeters([lon, lat], eastMeters, northMeters) {
+  const metersPerLatDegree = 111_320;
+  const latRadians = (lat * Math.PI) / 180;
+  const metersPerLonDegree = metersPerLatDegree * Math.cos(latRadians);
+  const lonOffset = metersPerLonDegree ? eastMeters / metersPerLonDegree : 0;
+  const latOffset = northMeters / metersPerLatDegree;
+  return [lon + lonOffset, lat + latOffset];
 }
 
 function getBounds(features) {
@@ -617,10 +628,15 @@ async function init() {
 
     const centerPoint = ringCenter(getOuterRing(parcel));
     if (centerPoint) {
+      const labelPoint = offsetLngLatByMeters(
+        centerPoint,
+        LABEL_OFFSET_EAST_METERS,
+        LABEL_OFFSET_NORTH_METERS,
+      );
       const labelNode = createLabelNode(parcel);
       const labelMarker = new YMapMarker(
         {
-          coordinates: centerPoint,
+          coordinates: labelPoint,
           zIndex: 2200,
           disableRoundCoordinates: true,
         },
