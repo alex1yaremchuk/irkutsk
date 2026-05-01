@@ -428,7 +428,8 @@ async function init() {
     (bounds[0][1] + bounds[1][1]) / 2,
   ];
 
-  const map = new YMap(document.getElementById("map"), {
+  const mapElement = document.getElementById("map");
+  const map = new YMap(mapElement, {
     location: { center, zoom: 16 },
     zoomRange: { min: 12, max: 19 },
     mode: "vector",
@@ -524,6 +525,7 @@ async function init() {
       }
     }
     hoveredParcelId = nextId;
+    mapElement.classList.toggle("is-parcel-hover", !!parcel);
     if (parcel) {
       const feature = featureByCadnum.get(nextId);
       if (feature) feature.update({ style: getParcelStyle(parcel, true) });
@@ -751,7 +753,7 @@ async function init() {
   });
   map.addChild(listener);
 
-  document.getElementById("map").addEventListener("click", () => {
+  mapElement.addEventListener("click", () => {
     if (nowTs() - lastInteractiveClickAt < 160) return;
     const parcel =
       hoveredParcel || findParcelByLngLat(visibleFeatures, lastPointerLngLat);
@@ -763,9 +765,7 @@ async function init() {
     openParcelPopup(parcel);
   });
   document.addEventListener("mousemove", moveTooltip);
-  document
-    .getElementById("map")
-    .addEventListener("mouseleave", () => setHoveredParcel(null));
+  mapElement.addEventListener("mouseleave", () => setHoveredParcel(null));
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {

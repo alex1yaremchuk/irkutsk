@@ -38,6 +38,11 @@ body {
   height: 100%;
 }
 
+#map.is-parcel-hover,
+#map.is-parcel-hover * {
+  cursor: pointer !important;
+}
+
 #map [class*="ymaps-"][class*="-copyright"],
 #map [class*="ymaps-"][class*="-gotoymaps"],
 #map [class*="ymaps-"][class*="-gototech"],
@@ -51,20 +56,15 @@ body {
 }
 
 .parcel-label__text {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
+  display: inline-block;
   transform: translate(-50%, -50%);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.86);
   color: #111827;
   font-size: 11px;
   line-height: 1;
   font-weight: 700;
-  box-shadow: 0 2px 7px rgba(15, 23, 42, 0.18);
+  text-shadow:
+    0 1px 2px rgba(255, 255, 255, 0.9),
+    0 -1px 2px rgba(255, 255, 255, 0.9);
 }
 
 .parcel-popup {
