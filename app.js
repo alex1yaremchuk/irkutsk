@@ -3,7 +3,7 @@ const SHEET_CSV_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vRAfXw_YaBPg3ofRp-75nvcVibslg-AeY-HwhpYYQXDcaZTzP3hPBupBoKROsHstC3hRDOl_zPpX1jh/pub?gid=0&single=true&output=csv";
 const SHEET_REFRESH_MS = 30_000;
 const CADASTRAL_PREFIX = "38:06:111215:";
-const LABELS_MIN_ZOOM = 15;
+const LABELS_MIN_ZOOM = 16;
 const TELEGRAM_USERNAME = "ayarem";
 const WHATSAPP_PHONE = "79679670322";
 
