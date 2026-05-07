@@ -1,4 +1,4 @@
-const DATA_URL = "./data/demo_parcels.geojson";
+const DATA_URL = "./parcels.geojson";
 const SHEET_CSV_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vRAfXw_YaBPg3ofRp-75nvcVibslg-AeY-HwhpYYQXDcaZTzP3hPBupBoKROsHstC3hRDOl_zPpX1jh/pub?gid=0&single=true&output=csv";
 const SHEET_REFRESH_MS = 30_000;
@@ -15,10 +15,25 @@ const STATUS_LABELS = {
   sold: "продано",
 };
 
-const STATUS_COLORS = {
-  free: { fill: "#309F48", hover: "#46bf5f", stroke: "#4c566a" },
-  reserved: { fill: "#94a3b8", hover: "#a5b1c4", stroke: "#4c566a" },
-  sold: { fill: "#636363", hover: "#484848", stroke: "#4c566a" },
+const STATUS_COLOR_VARS = {
+  free: {
+    fill: "--free",
+    hover: "--free-hover",
+    fallbackFill: "#309F48",
+    fallbackHover: "#46bf5f",
+  },
+  reserved: {
+    fill: "--reserved",
+    hover: "--reserved-hover",
+    fallbackFill: "#94a3b8",
+    fallbackHover: "#a5b1c4",
+  },
+  sold: {
+    fill: "--sold",
+    hover: "--sold-hover",
+    fallbackFill: "#636363",
+    fallbackHover: "#484848",
+  },
 };
 
 const openedState = { marker: null, parcelId: null, node: null };
@@ -44,6 +59,22 @@ function formatArea(value) {
 
 function formatSheetTimestamp(value) {
   return value ? value : "нет данных";
+}
+
+function getCssColor(name, fallback) {
+  const value = getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
+  return value || fallback;
+}
+
+function getStatusPalette(status) {
+  const config = STATUS_COLOR_VARS[status] || STATUS_COLOR_VARS.free;
+  return {
+    fill: getCssColor(config.fill, config.fallbackFill),
+    hover: getCssColor(config.hover, config.fallbackHover),
+    stroke: getCssColor("--parcel-stroke", "#4c566a"),
+  };
 }
 
 function parseNumberRu(value) {
@@ -244,7 +275,7 @@ function getBounds(features) {
 }
 
 function getParcelStyle(parcel, isHover = false) {
-  const palette = STATUS_COLORS[parcel.properties.status] || STATUS_COLORS.free;
+  const palette = getStatusPalette(parcel.properties.status);
   return {
     fill: isHover ? palette.hover : palette.fill,
     fillOpacity: 1,
@@ -267,7 +298,7 @@ function buildWhatsAppUrl(parcel) {
 
 function renderPopup(parcel) {
   const p = parcel.properties;
-  const palette = STATUS_COLORS[p.status] || STATUS_COLORS.free;
+  const palette = getStatusPalette(p.status);
   const title = p.lot_number
     ? `Участок №${escapeHtml(p.lot_number)}`
     : `Участок ${escapeHtml(p.short_num)}`;
@@ -423,11 +454,11 @@ async function init() {
     YMapDefaultFeaturesLayer,
   } = ymaps3;
 
-  const response = await fetch(`${DATA_URL}?v=20260430-02`, {
+  const response = await fetch(`${DATA_URL}?v=20260507-02`, {
     cache: "no-store",
   });
   if (!response.ok)
-    throw new Error("Не удалось загрузить demo_parcels.geojson");
+    throw new Error("Не удалось загрузить parcels.geojson");
   const data = await response.json();
   const allFeatures = data.features || [];
   let visibleFeatures = [];
