@@ -434,15 +434,44 @@ function isTouchDevice() {
   );
 }
 
+function installTouchScrollGuard(mapElement) {
+  if (!isTouchDevice()) return;
+
+  let isMultiTouchGesture = false;
+  const guardSingleTouch = (event) => {
+    const touchCount = event.touches?.length || 0;
+    if (touchCount >= 2) {
+      isMultiTouchGesture = true;
+      return;
+    }
+    if (
+      isMultiTouchGesture &&
+      (event.type === "touchend" || event.type === "touchcancel")
+    ) {
+      if (touchCount < 2) {
+        setTimeout(() => {
+          isMultiTouchGesture = false;
+        }, 0);
+      }
+      return;
+    }
+    event.stopImmediatePropagation();
+  };
+
+  ["touchstart", "touchmove", "touchend", "touchcancel"].forEach((eventName) => {
+    mapElement.addEventListener(eventName, guardSingleTouch, {
+      capture: true,
+      passive: true,
+    });
+  });
+}
+
 function configureMapBehaviors(map) {
   if (typeof map.setBehaviors !== "function" || !Array.isArray(map.behaviors)) {
     return;
   }
   let behaviors = map.behaviors.filter((behavior) => behavior !== "oneFingerZoom");
-  if (isTouchDevice()) {
-    behaviors = behaviors.filter((behavior) => behavior !== "drag");
-    if (!behaviors.includes("pinchZoom")) behaviors.push("pinchZoom");
-  }
+  if (isTouchDevice() && !behaviors.includes("pinchZoom")) behaviors.push("pinchZoom");
   map.setBehaviors(behaviors);
 }
 
@@ -504,6 +533,7 @@ async function init() {
   ];
 
   const mapElement = document.getElementById("map");
+  installTouchScrollGuard(mapElement);
   const map = new YMap(mapElement, {
     location: { center, zoom: 16 },
     zoomRange: { min: 12, max: 19 },

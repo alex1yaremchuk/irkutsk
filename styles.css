@@ -45,6 +45,13 @@ body {
   height: 100%;
 }
 
+@media (pointer: coarse) {
+  #map,
+  #map * {
+    touch-action: pan-y;
+  }
+}
+
 #map.is-parcel-hover,
 #map.is-parcel-hover * {
   cursor: pointer !important;
