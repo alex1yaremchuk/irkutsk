@@ -321,7 +321,7 @@ function renderPopup(parcel) {
   return `
     <button class="parcel-popup__close" type="button" aria-label="Закрыть">×</button>
     <div class="parcel-popup__title">${title}</div>
-    <div class="parcel-popup__row"><span>Кадастровый номер</span><strong>${escapeHtml(p.cadnum)}</strong></div>
+    <div class="parcel-popup__row"><span>К/Н</span><strong>${escapeHtml(p.cadnum)}</strong></div>
     <div class="parcel-popup__row"><span>Площадь</span><strong>${formatArea(p.area_m2)}</strong></div>
     <div class="parcel-popup__row"><span>Цена</span><strong>${formatRub(p.price_rub)}</strong></div>
     <div class="parcel-popup__row">
@@ -600,7 +600,7 @@ async function init() {
     YMapDefaultFeaturesLayer,
   } = ymaps3;
 
-  const response = await fetch(`${DATA_URL}?v=20260512-04`, {
+  const response = await fetch(`${DATA_URL}?v=20260512-05`, {
     cache: "no-store",
   });
   if (!response.ok)
