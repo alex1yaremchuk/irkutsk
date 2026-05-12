@@ -438,6 +438,7 @@ function installTouchScrollGuard(mapElement) {
   if (!isTouchDevice()) return;
 
   let isMultiTouchGesture = false;
+  const activeTouchPointers = new Set();
   const guardSingleTouch = (event) => {
     const touchCount = event.touches?.length || 0;
     if (touchCount >= 2) {
@@ -457,9 +458,34 @@ function installTouchScrollGuard(mapElement) {
     }
     event.stopImmediatePropagation();
   };
+  const guardSinglePointerMove = (event) => {
+    if (event.pointerType !== "touch") return;
+    if (activeTouchPointers.size < 2) event.stopImmediatePropagation();
+  };
+  const trackPointer = (event) => {
+    if (event.pointerType === "touch") activeTouchPointers.add(event.pointerId);
+  };
+  const untrackPointer = (event) => {
+    if (event.pointerType !== "touch") return;
+    activeTouchPointers.delete(event.pointerId);
+  };
 
   ["touchstart", "touchmove", "touchend", "touchcancel"].forEach((eventName) => {
     mapElement.addEventListener(eventName, guardSingleTouch, {
+      capture: true,
+      passive: true,
+    });
+  });
+  mapElement.addEventListener("pointerdown", trackPointer, {
+    capture: true,
+    passive: true,
+  });
+  mapElement.addEventListener("pointermove", guardSinglePointerMove, {
+    capture: true,
+    passive: true,
+  });
+  ["pointerup", "pointercancel", "pointerleave"].forEach((eventName) => {
+    mapElement.addEventListener(eventName, untrackPointer, {
       capture: true,
       passive: true,
     });
@@ -516,7 +542,7 @@ async function init() {
     YMapDefaultFeaturesLayer,
   } = ymaps3;
 
-  const response = await fetch(`${DATA_URL}?v=20260512-01`, {
+  const response = await fetch(`${DATA_URL}?v=20260512-03`, {
     cache: "no-store",
   });
   if (!response.ok)

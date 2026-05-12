@@ -4,5 +4,7 @@
 !app.js
 !styles.css
 !parcels.geojson
+!o/
+!o/index.html
 !data/
 !data/demo_parcels.geojson

@@ -48,7 +48,7 @@ body {
 @media (pointer: coarse) {
   #map,
   #map * {
-    touch-action: pan-y;
+    touch-action: pan-y !important;
   }
 }
 
