@@ -88,13 +88,16 @@ body {
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 16px 38px rgba(15, 23, 42, 0.28);
-  transform: translate(-50%, calc(-100% - 12px));
+  transform: translate(
+    calc(-50% + var(--popup-shift-x, 0px)),
+    calc(-100% - 12px + var(--popup-shift-y, 0px))
+  );
 }
 
 .parcel-popup::after {
   content: "";
   position: absolute;
-  left: 50%;
+  left: var(--popup-arrow-left, 50%);
   bottom: -7px;
   width: 14px;
   height: 14px;
@@ -102,6 +105,21 @@ body {
   border-right: 1px solid rgba(148, 163, 184, 0.5);
   border-bottom: 1px solid rgba(148, 163, 184, 0.5);
   background: #ffffff;
+}
+
+.parcel-popup.is-below-anchor {
+  transform: translate(
+    calc(-50% + var(--popup-shift-x, 0px)),
+    calc(12px + var(--popup-shift-y, 0px))
+  );
+}
+
+.parcel-popup.is-below-anchor::after {
+  top: -7px;
+  bottom: auto;
+  border: 0;
+  border-left: 1px solid rgba(148, 163, 184, 0.5);
+  border-top: 1px solid rgba(148, 163, 184, 0.5);
 }
 
 .parcel-popup__title {

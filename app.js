@@ -8,6 +8,8 @@ const LABEL_OFFSET_EAST_METERS = 0;
 const LABEL_OFFSET_NORTH_METERS = 12;
 const TELEGRAM_USERNAME = "ayarem";
 const WHATSAPP_PHONE = "79679670322";
+const POPUP_VIEWPORT_MARGIN = 12;
+const POPUP_ARROW_MIN_OFFSET = 22;
 
 const STATUS_LABELS = {
   free: "свободно",
@@ -344,6 +346,60 @@ function renderTooltip(parcel) {
   `;
 }
 
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function resetPopupPlacement(node) {
+  node.classList.remove("is-below-anchor");
+  node.style.setProperty("--popup-shift-x", "0px");
+  node.style.setProperty("--popup-shift-y", "0px");
+  node.style.removeProperty("--popup-arrow-left");
+}
+
+function fitPopupIntoViewport(node) {
+  if (!node?.isConnected) return;
+  resetPopupPlacement(node);
+
+  const applyPlacement = () => {
+    if (!node.isConnected) return;
+    let rect = node.getBoundingClientRect();
+    if (rect.top < POPUP_VIEWPORT_MARGIN) {
+      node.classList.add("is-below-anchor");
+      rect = node.getBoundingClientRect();
+    }
+
+    let shiftX = 0;
+    if (rect.left < POPUP_VIEWPORT_MARGIN) {
+      shiftX = POPUP_VIEWPORT_MARGIN - rect.left;
+    } else if (rect.right > window.innerWidth - POPUP_VIEWPORT_MARGIN) {
+      shiftX = window.innerWidth - POPUP_VIEWPORT_MARGIN - rect.right;
+    }
+
+    let shiftY = 0;
+    if (rect.top < POPUP_VIEWPORT_MARGIN) {
+      shiftY = POPUP_VIEWPORT_MARGIN - rect.top;
+    } else if (rect.bottom > window.innerHeight - POPUP_VIEWPORT_MARGIN) {
+      shiftY = window.innerHeight - POPUP_VIEWPORT_MARGIN - rect.bottom;
+    }
+
+    node.style.setProperty("--popup-shift-x", `${Math.round(shiftX)}px`);
+    node.style.setProperty("--popup-shift-y", `${Math.round(shiftY)}px`);
+    const arrowLeft = clamp(
+      rect.width / 2 - shiftX,
+      POPUP_ARROW_MIN_OFFSET,
+      rect.width - POPUP_ARROW_MIN_OFFSET,
+    );
+    node.style.setProperty("--popup-arrow-left", `${Math.round(arrowLeft)}px`);
+  };
+
+  if (node.offsetWidth && node.offsetHeight) {
+    applyPlacement();
+  } else {
+    requestAnimationFrame(applyPlacement);
+  }
+}
+
 function closePopup(map, interactiveEntities) {
   if (openedState.marker) {
     map.removeChild(openedState.marker);
@@ -358,6 +414,7 @@ function openPopup(map, parcel, YMapMarker, interactiveEntities) {
   const parcelId = parcel.properties.cadnum;
   if (openedState.parcelId === parcelId && openedState.marker) {
     if (openedState.node) openedState.node.innerHTML = renderPopup(parcel);
+    if (openedState.node) fitPopupIntoViewport(openedState.node);
     return;
   }
   closePopup(map, interactiveEntities);
@@ -385,6 +442,7 @@ function openPopup(map, parcel, YMapMarker, interactiveEntities) {
   openedState.marker = marker;
   openedState.parcelId = parcelId;
   openedState.node = node;
+  fitPopupIntoViewport(node);
 }
 
 function createLabelNode(parcel) {
@@ -542,7 +600,7 @@ async function init() {
     YMapDefaultFeaturesLayer,
   } = ymaps3;
 
-  const response = await fetch(`${DATA_URL}?v=20260512-03`, {
+  const response = await fetch(`${DATA_URL}?v=20260512-04`, {
     cache: "no-store",
   });
   if (!response.ok)
@@ -684,7 +742,10 @@ async function init() {
       const openedParcel = visibleFeatures.find(
         (feature) => feature.properties.cadnum === openedState.parcelId,
       );
-      if (openedParcel) openedState.node.innerHTML = renderPopup(openedParcel);
+      if (openedParcel) {
+        openedState.node.innerHTML = renderPopup(openedParcel);
+        fitPopupIntoViewport(openedState.node);
+      }
     }
   }
 
@@ -839,9 +900,11 @@ async function init() {
     onUpdate: (event = {}) => {
       const location = event.location || event;
       const nextZoom = Number(location?.zoom);
-      if (!Number.isFinite(nextZoom) || nextZoom === currentZoom) return;
-      currentZoom = nextZoom;
-      updateLabelVisibility();
+      if (Number.isFinite(nextZoom) && nextZoom !== currentZoom) {
+        currentZoom = nextZoom;
+        updateLabelVisibility();
+      }
+      fitPopupIntoViewport(openedState.node);
     },
     onClick: (object, event) => {
       if (pointerBlocksHover) return;
@@ -903,6 +966,7 @@ async function init() {
   });
   document.addEventListener("mousemove", moveTooltip);
   mapElement.addEventListener("mouseleave", () => setHoveredParcel(null));
+  window.addEventListener("resize", () => fitPopupIntoViewport(openedState.node));
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
