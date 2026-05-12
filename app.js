@@ -7,7 +7,7 @@ const LABELS_MIN_ZOOM = 16;
 const MAP_MIN_ZOOM = 12;
 const MAP_MAX_ZOOM = 19;
 const MAP_INITIAL_ZOOM = 16;
-const MAP_ZOOM_STEP = 1;
+const MAP_ZOOM_STEP = 0.5;
 const LABEL_OFFSET_EAST_METERS = 0;
 const LABEL_OFFSET_NORTH_METERS = 12;
 const TELEGRAM_USERNAME = "ayarem";
@@ -674,7 +674,7 @@ async function init() {
     YMapDefaultFeaturesLayer,
   } = ymaps3;
 
-  const response = await fetch(`${DATA_URL}?v=20260512-06`, {
+  const response = await fetch(`${DATA_URL}?v=20260512-07`, {
     cache: "no-store",
   });
   if (!response.ok)
