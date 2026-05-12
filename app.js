@@ -4,6 +4,10 @@ const SHEET_CSV_URL =
 const SHEET_REFRESH_MS = 30_000;
 const CADASTRAL_PREFIX = "38:06:111215:";
 const LABELS_MIN_ZOOM = 16;
+const MAP_MIN_ZOOM = 12;
+const MAP_MAX_ZOOM = 19;
+const MAP_INITIAL_ZOOM = 16;
+const MAP_ZOOM_STEP = 1;
 const LABEL_OFFSET_EAST_METERS = 0;
 const LABEL_OFFSET_NORTH_METERS = 12;
 const TELEGRAM_USERNAME = "ayarem";
@@ -554,9 +558,79 @@ function configureMapBehaviors(map) {
   if (typeof map.setBehaviors !== "function" || !Array.isArray(map.behaviors)) {
     return;
   }
-  let behaviors = map.behaviors.filter((behavior) => behavior !== "oneFingerZoom");
+  let behaviors = map.behaviors.filter(
+    (behavior) => behavior !== "oneFingerZoom" && behavior !== "scrollZoom",
+  );
   if (isTouchDevice() && !behaviors.includes("pinchZoom")) behaviors.push("pinchZoom");
   map.setBehaviors(behaviors);
+}
+
+function addZoomControls(map, mapElement, fallbackCenter, getCurrentZoom) {
+  const previousControls = mapElement.querySelector(".map-zoom");
+  if (previousControls) previousControls.remove();
+
+  const controls = document.createElement("div");
+  controls.className = "map-zoom";
+
+  const zoomInButton = document.createElement("button");
+  zoomInButton.type = "button";
+  zoomInButton.dataset.action = "in";
+  zoomInButton.setAttribute("aria-label", "Увеличить");
+  zoomInButton.textContent = "+";
+
+  const zoomOutButton = document.createElement("button");
+  zoomOutButton.type = "button";
+  zoomOutButton.dataset.action = "out";
+  zoomOutButton.setAttribute("aria-label", "Уменьшить");
+  zoomOutButton.textContent = "−";
+
+  const stopOnly = (event) => event.stopPropagation();
+  const stopAndPrevent = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  ["mousedown", "mouseup", "pointerdown", "pointerup", "touchstart", "touchend"].forEach(
+    (eventName) => controls.addEventListener(eventName, stopOnly, { passive: true }),
+  );
+  ["click", "dblclick", "wheel"].forEach((eventName) =>
+    controls.addEventListener(eventName, stopAndPrevent, { passive: false }),
+  );
+
+  const getMapCenter = () =>
+    Array.isArray(map.center) && map.center.length === 2
+      ? map.center
+      : fallbackCenter;
+  const getMapZoom = () =>
+    Number.isFinite(map.zoom) ? map.zoom : getCurrentZoom();
+
+  const changeZoom = (delta) => {
+    const currentZoom = getMapZoom();
+    const targetZoom = clamp(
+      currentZoom + delta,
+      MAP_MIN_ZOOM,
+      MAP_MAX_ZOOM,
+    );
+    if (targetZoom === currentZoom) return;
+    map.setLocation({
+      center: getMapCenter(),
+      zoom: targetZoom,
+      duration: 180,
+    });
+  };
+
+  zoomInButton.addEventListener("click", (event) => {
+    stopAndPrevent(event);
+    changeZoom(MAP_ZOOM_STEP);
+  });
+  zoomOutButton.addEventListener("click", (event) => {
+    stopAndPrevent(event);
+    changeZoom(-MAP_ZOOM_STEP);
+  });
+
+  controls.appendChild(zoomInButton);
+  controls.appendChild(zoomOutButton);
+  mapElement.appendChild(controls);
 }
 
 function applySheetData(features, sheetData) {
@@ -600,7 +674,7 @@ async function init() {
     YMapDefaultFeaturesLayer,
   } = ymaps3;
 
-  const response = await fetch(`${DATA_URL}?v=20260512-05`, {
+  const response = await fetch(`${DATA_URL}?v=20260512-06`, {
     cache: "no-store",
   });
   if (!response.ok)
@@ -618,9 +692,10 @@ async function init() {
 
   const mapElement = document.getElementById("map");
   installTouchScrollGuard(mapElement);
+  let currentZoom = MAP_INITIAL_ZOOM;
   const map = new YMap(mapElement, {
-    location: { center, zoom: 16 },
-    zoomRange: { min: 12, max: 19 },
+    location: { center, zoom: MAP_INITIAL_ZOOM },
+    zoomRange: { min: MAP_MIN_ZOOM, max: MAP_MAX_ZOOM },
     mode: "vector",
     copyrights: false,
     distribution: false,
@@ -628,6 +703,7 @@ async function init() {
   map.addChild(new YMapDefaultSchemeLayer({}));
   map.addChild(new YMapDefaultFeaturesLayer({}));
   configureMapBehaviors(map);
+  addZoomControls(map, mapElement, center, () => currentZoom);
 
   const interactiveEntities = new Set();
   const featureByEntity = new Map();
@@ -639,7 +715,6 @@ async function init() {
   const tooltipNode = document.createElement("div");
   tooltipNode.className = "parcel-tooltip";
   document.body.appendChild(tooltipNode);
-  let currentZoom = 16;
   let hoveredParcelId = null;
   let hoveredParcel = null;
   let lastPointerLngLat = null;
