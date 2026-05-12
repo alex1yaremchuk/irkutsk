@@ -674,7 +674,7 @@ async function init() {
     YMapDefaultFeaturesLayer,
   } = ymaps3;
 
-  const response = await fetch(`${DATA_URL}?v=20260512-07`, {
+  const response = await fetch(`${DATA_URL}?v=20260512-08`, {
     cache: "no-store",
   });
   if (!response.ok)

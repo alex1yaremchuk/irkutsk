@@ -104,6 +104,12 @@ body {
   transform: translateY(1px);
 }
 
+@media (pointer: coarse) {
+  .map-zoom {
+    display: none;
+  }
+}
+
 .parcel-label {
   pointer-events: none;
   user-select: none;
