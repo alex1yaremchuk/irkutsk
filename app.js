@@ -19,20 +19,26 @@ const STATUS_COLOR_VARS = {
   free: {
     fill: "--free",
     hover: "--free-hover",
-    fallbackFill: "#309F48",
-    fallbackHover: "#46bf5f",
+    fallbackFill: "#417f55",
+    fallbackHover: "#519567",
+    badgeBg: "--status-free-bg",
+    badgeText: "--status-free-text",
   },
   reserved: {
     fill: "--reserved",
     hover: "--reserved-hover",
     fallbackFill: "#94a3b8",
     fallbackHover: "#a5b1c4",
+    badgeBg: "--status-reserved-bg",
+    badgeText: "--status-reserved-text",
   },
   sold: {
     fill: "--sold",
     hover: "--sold-hover",
-    fallbackFill: "#636363",
-    fallbackHover: "#484848",
+    fallbackFill: "#e5e5e6",
+    fallbackHover: "#ededf1",
+    badgeBg: "--status-sold-bg",
+    badgeText: "--status-sold-text",
   },
 };
 
@@ -74,6 +80,14 @@ function getStatusPalette(status) {
     fill: getCssColor(config.fill, config.fallbackFill),
     hover: getCssColor(config.hover, config.fallbackHover),
     stroke: getCssColor("--parcel-stroke", "#4c566a"),
+  };
+}
+
+function getStatusBadgePalette(status) {
+  const config = STATUS_COLOR_VARS[status] || STATUS_COLOR_VARS.free;
+  return {
+    background: getCssColor(config.badgeBg, config.fallbackFill),
+    text: getCssColor(config.badgeText, "#ffffff"),
   };
 }
 
@@ -298,7 +312,7 @@ function buildWhatsAppUrl(parcel) {
 
 function renderPopup(parcel) {
   const p = parcel.properties;
-  const palette = getStatusPalette(p.status);
+  const badgePalette = getStatusBadgePalette(p.status);
   const title = p.lot_number
     ? `Участок №${escapeHtml(p.lot_number)}`
     : `Участок ${escapeHtml(p.short_num)}`;
@@ -310,7 +324,7 @@ function renderPopup(parcel) {
     <div class="parcel-popup__row"><span>Цена</span><strong>${formatRub(p.price_rub)}</strong></div>
     <div class="parcel-popup__row">
       <span>Статус</span>
-      <strong><span class="parcel-popup__status" style="background:${palette.fill}">${STATUS_LABELS[p.status] || "—"}</span></strong>
+      <strong><span class="parcel-popup__status" style="background:${badgePalette.background};color:${badgePalette.text}">${STATUS_LABELS[p.status] || "—"}</span></strong>
     </div>
     <div class="parcel-popup__actions">
       <a class="contact-button contact-button--tg" href="${buildTelegramUrl(parcel)}" target="_blank" rel="noopener noreferrer">Telegram</a>
@@ -413,6 +427,25 @@ function updateSheetStatus() {
   node.textContent = `Google Sheet: обновлено ${formatSheetTimestamp(sheetState.timestamp)}. Проверка каждые 30 секунд.`;
 }
 
+function isTouchDevice() {
+  return (
+    window.matchMedia?.("(pointer: coarse)").matches ||
+    Number(navigator.maxTouchPoints) > 0
+  );
+}
+
+function configureMapBehaviors(map) {
+  if (typeof map.setBehaviors !== "function" || !Array.isArray(map.behaviors)) {
+    return;
+  }
+  let behaviors = map.behaviors.filter((behavior) => behavior !== "oneFingerZoom");
+  if (isTouchDevice()) {
+    behaviors = behaviors.filter((behavior) => behavior !== "drag");
+    if (!behaviors.includes("pinchZoom")) behaviors.push("pinchZoom");
+  }
+  map.setBehaviors(behaviors);
+}
+
 function applySheetData(features, sheetData) {
   let changed = false;
   features.forEach((feature) => {
@@ -454,7 +487,7 @@ async function init() {
     YMapDefaultFeaturesLayer,
   } = ymaps3;
 
-  const response = await fetch(`${DATA_URL}?v=20260507-02`, {
+  const response = await fetch(`${DATA_URL}?v=20260512-01`, {
     cache: "no-store",
   });
   if (!response.ok)
@@ -480,6 +513,7 @@ async function init() {
   });
   map.addChild(new YMapDefaultSchemeLayer({}));
   map.addChild(new YMapDefaultFeaturesLayer({}));
+  configureMapBehaviors(map);
 
   const interactiveEntities = new Set();
   const featureByEntity = new Map();

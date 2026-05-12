@@ -1,16 +1,22 @@
 :root {
-  --bg: #0f172a;
+  --bg: #f3f3f3;
   --panel: #ffffff;
   --text: #111827;
   --muted: #64748b;
   --line: #d7dee8;
-  --free: #309f48;
-  --free-hover: #46bf5f;
+  --free: #417f55;
+  --free-hover: #519567;
   --reserved: #94a3b8;
   --reserved-hover: #a5b1c4;
-  --sold: #636363;
-  --sold-hover: #484848;
-  --parcel-stroke: #4c566a;
+  --sold: #e5e5e6;
+  --sold-hover: #ededf1;
+  --parcel-stroke: #fffef7;
+  --status-free-bg: #417f55;
+  --status-free-text: #ffffff;
+  --status-reserved-bg: #94a3b8;
+  --status-reserved-text: #ffffff;
+  --status-sold-bg: #e5e5e6;
+  --status-sold-text: #ffffff;
   --accent: #2563eb;
 }
 

@@ -3,5 +3,6 @@
 !index.html
 !app.js
 !styles.css
+!parcels.geojson
 !data/
 !data/demo_parcels.geojson
